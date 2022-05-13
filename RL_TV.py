@@ -6,6 +6,7 @@ import cupy
 from cupy import fft
 import numpy as np
 from numpy import float32
+import matplotlib.pyplot as plt
 
 def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
     sizeI = im_extVol.size
@@ -16,60 +17,62 @@ def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
         J3 = 0
         #print('J1.shape: ' + str(J1.shape) + ' J2.shape: ' + str(J2.shape))
 
-        J4 = np.asarray(np.zeros((sizeI, 2), np.float32))
+        J4 = np.asarray(np.zeros((2, sizeI), np.float32))
         #print('type(J4): ' + str(type(J4)) + ' J4.shape: ' + str(J4.shape) +' J2.size: ' + str(J4.size))
 
         wI = cupy.maximum(J1,0)
-    print('wI.size ' + str(wI.size))
+        print('wI.size ' + str(wI.size))
 
-    lamb_duh = 0
+        lamb_duh = 0
 
-    for k in range(inner_iter):
-        if k > 2:
-            print('J4[0].size: ' + str(J4[0].size) + ' J4[1].size: ' + str(J4[1].size))
-            print('type(J4): ' + str(type(J4)))
-            with cupy.cuda.Device(0):
-            
-                numer = cupy.dot(J4[:,0], J4[:,1])
-            #numer.replace(cupy.isnan, 0)
-                denom = cupy.dot(J4[:,1],J4[:,1]) + epsilon
-            #denom.replace(cupy.isnan, epsilon)
-            lamb_duh = (numer)/(denom)
-            lamb_duh = max(min(lamb_duh,1),0) #stability enforcement
+        for k in range(inner_iter):
+            if k > 2:
+                print('J4[0,:].size: ' + str(J4[0,:].size) + ' J4[1,:].size: ' + str(J4[1,:].size))
+                print('type(J4): ' + str(type(J4)))
+                #with cupy.cuda.Device(0):
+                
+                numer = cupy.dot(J4[0,:], J4[1,:])
+                #numer.replace(cupy.isnan, 0)
+                denom = (cupy.dot(J4[1,:],J4[1,:]) + epsilon)
+                #denom.replace(cupy.isnan, epsilon)
+                lamb_duh = (numer)/(denom)
+                lamb_duh = max(min(lamb_duh,1),0) #stability enforcement
 
-        with cupy.cuda.Device(0):
+
             Y = cupy.maximum(J2 + lamb_duh*(J2 - J3), 0) # plus positivity constraint
             print('Y.size: ' + str(Y.size) + ' Y.shape: ' + str(Y.shape))
             print('J2.shape: ' +  str(J2.shape))
 
-        # 3.b Make core for the LR estimation
-        #with cupy.cuda.Device(0):
+            # 3.b Make core for the LR estimation
+            #with cupy.cuda.Device(0):
             ReBlurred = cupy.real(fft.ifftn(otf*fft.fftn(Y))).astype(cupy.float32)
-        #print(ReBlurred)
-        #print(epsilon)
+            #print(ReBlurred)
+            #print(epsilon)
             ReBlurred = cupy.maximum(ReBlurred, epsilon)
-        #print('ReBlurred.size: ' + str(ReBlurred.size))
+            #print('ReBlurred.size: ' + str(ReBlurred.size))
 
             ImRatio = wI/ReBlurred + epsilon
-        #print('ImRatio.size: ' + str(ImRatio.size))
+            #print('ImRatio.size: ' + str(ImRatio.size))
 
             Ratio = cupy.real(fft.ifftn(cupy.conj(otf)*fft.fftn(ImRatio)))
             if TV_reg != 0: # total variation regularization
                 TV_term = computeTV(J2, TV_reg, Nz, Ny, Nx)
                 Ratio = Ratio/TV_term
-
+            plt.figure(k)
+            plt.imshow(cupy.reshape(ReBlurred, (Nz, Ny, Nx), order='C')[19,:,:].get())
             del ImRatio
             del ReBlurred
 
             J3 = cupy.copy(J2)
             J2 = cupy.maximum(Y*Ratio, 0)
-        #Jtemp = J2 - Y
-        #print('J4[:,0].shape: ' + str(J4[:,0].shape) )
-        #print('J4[0].shape: ' + str(J4[0].shape) )
-            J4[:,1] = cupy.copy(J4[:,0])
-            J4[:,0] = cupy.copy(J2 - Y).get()
+            #Jtemp = J2 - Y
+            #print('J4[:,0].shape: ' + str(J4[:,0].shape) )
+            #print('J4[0].shape: ' + str(J4[0].shape) )
+            J4[1,:] = cupy.copy(J4[0,:])
+            # J4[:,0] = cupy.copy(J2 - Y).get()
+            J4[0,:] = cupy.copy(J2 - Y).get()
 
-    return J2 
+        return J2 
 
 
 def computeTV(Image, TV_reg, Nz, Ny, Nx):
