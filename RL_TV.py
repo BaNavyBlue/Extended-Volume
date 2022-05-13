@@ -17,7 +17,7 @@ def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
         J3 = 0
         #print('J1.shape: ' + str(J1.shape) + ' J2.shape: ' + str(J2.shape))
 
-        J4 = np.asarray(np.zeros((2, sizeI), np.float32))
+        J4 = cupy.asarray(cupy.zeros((2, sizeI), cupy.float32))
         #print('type(J4): ' + str(type(J4)) + ' J4.shape: ' + str(J4.shape) +' J2.size: ' + str(J4.size))
 
         wI = cupy.maximum(J1,0)
@@ -58,8 +58,8 @@ def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
             if TV_reg != 0: # total variation regularization
                 TV_term = computeTV(J2, TV_reg, Nz, Ny, Nx)
                 Ratio = Ratio/TV_term
-            plt.figure(k)
-            plt.imshow(cupy.reshape(ReBlurred, (Nz, Ny, Nx), order='C')[19,:,:].get())
+            # plt.figure(k)
+            # plt.imshow(ReBlurred[19,:,:].get())
             del ImRatio
             del ReBlurred
 
@@ -70,21 +70,21 @@ def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
             #print('J4[0].shape: ' + str(J4[0].shape) )
             J4[1,:] = cupy.copy(J4[0,:])
             # J4[:,0] = cupy.copy(J2 - Y).get()
-            J4[0,:] = cupy.copy(J2 - Y).get()
+            J4[0,:] = cupy.copy(cupy.reshape((J2 - Y),(J4[0].size,), order='C'))
 
         return J2 
 
 
 def computeTV(Image, TV_reg, Nz, Ny, Nx):
     epsilon = cupy.finfo(cupy.float32).eps
-    gx = cupy.diff(cupy.reshape(Image, (Nz, Ny, Nx), order='C'), 1, 1)
-    Oxp = cupy.pad(gx,((0,0),(0,0),(0,1)), 'constant', const_values = 0 )
-    Oxn = cupy.pad(gx, ((0,0),(0,0),(1,0)), 'constant', constant_values = 0)
+    gx = cupy.diff(Image, 1, 2)
+    Oxp = cupy.pad(gx,((0,0),(0,0),(0,1)), mode='constant', constant_values = 0 )
+    Oxn = cupy.pad(gx, ((0,0),(0,0),(1,0)), mode='constant', constant_values = 0)
     mx = (cupy.sign(Oxp) + cupy.sign(Oxn))/2*cupy.minimum(Oxp, Oxn)
     mx = cupy.maximum(mx, epsilon)
     Dx = Oxp/cupy.sqrt(Oxp**2 + mx**2)
-    DDx = cupy.diff(Dx, 1 ,1)
-    DDx = cupy.pad(DDx, ((0,0),(0,0),(1,0)), 'constant', constant_values = 0)
+    DDx = cupy.diff(Dx, 1 ,2)
+    DDx = cupy.pad(DDx, ((0,0),(0,0),(1,0)), mode='constant', constant_values = 0)
 
     del gx
     del Oxp
@@ -92,14 +92,14 @@ def computeTV(Image, TV_reg, Nz, Ny, Nx):
     del mx
     del Dx
     
-    gy = cupy.diff(cupy.reshape(Image, (Nz, Ny, Nx), order='C'), 1, 2)
-    Oyp = cupy.pad(gy, ((0,0),(0,1),(0,0)), 'constant', constant_values = 0)
-    Oyn = cupy.pad(gy, ((0,0),(1,0),(0,0)), 'constant', constant_values = 0)
+    gy = cupy.diff(Image, 1, 1)
+    Oyp = cupy.pad(gy, ((0,0),(0,1),(0,0)), mode='constant', constant_values = 0)
+    Oyn = cupy.pad(gy, ((0,0),(1,0),(0,0)), mode='constant', constant_values = 0)
     my = (cupy.sign(Oyp) + cupy.sign(Oyn))/2*cupy.minimum(Oyp, Oyn)
     my = cupy.maximum(my, epsilon)
     Dy = Oyp/cupy.sqrt(Oyp**2 + my**2)
-    DDy = cupy.diff(Dy, 1, 2)
-    DDy = cupy.pad(DDy, ((0,0),(1,0), (0,0)), 'constant', constant_values = 0)
+    DDy = cupy.diff(Dy, 1, 1)
+    DDy = cupy.pad(DDy, ((0,0),(1,0), (0,0)), mode='constant', constant_values = 0)
 
     del gy
     del Oyp
@@ -116,4 +116,4 @@ def computeTV(Image, TV_reg, Nz, Ny, Nx):
     TV_term = cupy.maximum(TV_term, epsilon)
     print('Size TV_term: ' + str(TV_term.size) + ' Shape TV_term: ' + str(TV_term.shape))
 
-    return cupy.reshape(TV_term, (TV_term.size,), order='C')
+    return TV_term
