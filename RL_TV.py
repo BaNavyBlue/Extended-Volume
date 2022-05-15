@@ -10,10 +10,10 @@ from numpy import float32
 import matplotlib.pyplot as plt
 import math
 
-def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
+def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx, cp_stream):
     sizeI = im_extVol.size
     epsilon = cupy.finfo(cupy.float32).eps
-    with cupy.cuda.Device(0):
+    with cp_stream:
         J1 = cupy.copy(im_extVol)
 
         J2 = cupy.copy(J1)
@@ -51,7 +51,7 @@ def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
             Ratio = cupy.real(fft.ifftn(cupy.conj(otf)*fft.fftn(ImRatio))).astype(cupy.float32)
 
             if TV_reg != 0: # total variation regularization
-                TV_term = computeTV(J2, TV_reg, Nz, Ny, Nx)
+                TV_term = computeTV(J2, TV_reg, Nz, Ny, Nx, cp_stream)
                 Ratio = Ratio/TV_term
 
             del ImRatio
@@ -68,9 +68,9 @@ def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
 
         return J2
 
-def computeTV(Image, TV_reg, Nz, Ny, Nx):
+def computeTV(Image, TV_reg, Nz, Ny, Nx, cp_stream):
     epsilon = cupy.finfo(cupy.float32).eps
-    with cupy.cuda.Device(0):
+    with cp_stream:
         gx = cupy.diff(Image, 1, 2)
         Oxp = cupy.pad(gx,((0,0),(0,0),(0,1)), mode='constant', constant_values = 0 )
         Oxn = cupy.pad(gx, ((0,0),(0,0),(1,0)), mode='constant', constant_values = 0)
