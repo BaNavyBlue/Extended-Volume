@@ -2,32 +2,36 @@
 # adapted from Matlab devconlucy function
 
 from gettext import npgettext
+import random
 import cupy
 from cupy import fft
 import numpy as np
 from numpy import float32
 import matplotlib.pyplot as plt
+import math
 
 def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
     sizeI = im_extVol.size
     epsilon = cupy.finfo(cupy.float32).eps
     with cupy.cuda.Device(0):
         J1 = cupy.copy(im_extVol)
+
         J2 = cupy.copy(J1)
         J3 = 0
         #print('J1.shape: ' + str(J1.shape) + ' J2.shape: ' + str(J2.shape))
 
         J4 = cupy.zeros((2, sizeI), dtype=cupy.float32)
         #print('type(J4): ' + str(type(J4)) + ' J4.shape: ' + str(J4.shape) +' J2.size: ' + str(J4.size))
-
+ 
         wI = cupy.maximum(J1,0)
-        print('wI.size ' + str(wI.size))
+        # print('wI.size ' + str(wI.size))
+
         
 
         lamb_duh = 0
 
         for k in range(inner_iter):
-            if k > 2:
+            if k > 1:
                 # print('J4[0,:].size: ' + str(J4[0,:].size) + ' J4[1,:].size: ' + str(J4[1,:].size))
                 # print('type(J4): ' + str(type(J4)))
                 #with cupy.cuda.Device(0):
@@ -37,14 +41,14 @@ def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
                 denom = (cupy.sum(J4[1,:].conj()*J4[1,:]) + epsilon)
 
                 lamb_duh = (numer)/(denom)
-                print(lamb_duh.dtype)
+                # print(lamb_duh.dtype)
                 
                 min_lamb = cupy.array([lamb_duh.get(), 1.0],dtype=cupy.float32)
                 min_lamb = cupy.nanmin((min_lamb))
                 max_lamb = cupy.array([min_lamb.get(), 0.0], dtype=cupy.float32)
                 lamb_duh = cupy.nanmax(max_lamb) #stability enforcement
-                print('lamb_duh:' + str(lamb_duh))
-
+                
+            # print('lamb_duh:' + str(lamb_duh))
 
             Y = cupy.maximum(J2 + lamb_duh*(J2 - J3), 0) # plus positivity constraint
             # print('Y.size: ' + str(Y.size) + ' Y.shape: ' + str(Y.shape))
@@ -57,6 +61,11 @@ def RL_TV(im_extVol, otf, inner_iter, TV_reg, Nz, Ny, Nx):
             #print(epsilon)
             ReBlurred = cupy.maximum(ReBlurred, epsilon)
             #print('ReBlurred.size: ' + str(ReBlurred.size))
+            # print(otf.dtype)
+            # print(otf.shape)
+            # print(otf[19 ,47:79, 47:79])
+            # plt.figure(k)
+            # plt.imshow(ReBlurred[19,:,:].get())
 
             ImRatio = wI/ReBlurred + epsilon
             #print('ImRatio.size: ' + str(ImRatio.size))
@@ -125,5 +134,7 @@ def computeTV(Image, TV_reg, Nz, Ny, Nx):
 
     TV_term = cupy.maximum(TV_term, epsilon)
     #print('Size TV_term: ' + str(TV_term.size) + ' Shape TV_term: ' + str(TV_term.shape))
-
+    #plt.figure(random.randint(0,100))
+    #plt.imshow(TV_term[19,:,:].get())
+    #print(TV_term[19,0:31,0:31])
     return TV_term
