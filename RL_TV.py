@@ -108,8 +108,5 @@ def computeTV(Image, TV_reg, Nz, Ny, Nx):
         del DDy
 
         TV_term = cupy.maximum(TV_term, epsilon)
-    #print('Size TV_term: ' + str(TV_term.size) + ' Shape TV_term: ' + str(TV_term.shape) + ' type: ' + str(TV_term.dtype))
-    #plt.figure(random.randint(0,100))
-    #plt.imshow(TV_term[19,:,:].get())
-    #print(TV_term[19,0:31,0:31])
+
     return TV_term
